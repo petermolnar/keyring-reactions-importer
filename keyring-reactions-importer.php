@@ -847,9 +847,8 @@ abstract class Keyring_Reactions_Base {
 		/*
 		 * load this for test, in case you need it for a specific post only
 		 */
-		$raw = array ( get_post( 8180 ));
+		//$raw = array ( get_post( 8180 ));
 
-		/*
 		$args = array (
 			'meta_key' => 'syndication_urls',
 			'post_type' => 'any',
@@ -857,10 +856,6 @@ abstract class Keyring_Reactions_Base {
 			'post_status' => 'publish',
 		);
 		$raw = get_posts( $args );
-
-		*/
-
-
 
 		foreach ( $raw as $p ) {
 			$syndication_urls = get_post_meta ( $p->ID, 'syndication_urls', true );
