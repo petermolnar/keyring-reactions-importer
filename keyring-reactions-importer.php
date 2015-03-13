@@ -3,7 +3,7 @@
 Plugin Name: Keyring Reactions Importer
 Plugin URI: https://github.com/petermolnar/keyring-reactions-importer
 Description: A recations (comments, favs, etc. ) importer based on Keyring
-Version: 0.1
+Version: 0.2
 Author: Peter Molnar <hello@petermolnar.eu>
 Author URI: http://petermolnar.eu/
 License: GPLv3
@@ -844,9 +844,8 @@ abstract class Keyring_Reactions_Base {
 			$this->posts = $posts;
 			return true;
 		}
-		/*
-		 * load this for test, in case you need it for a specific post only
-		 */
+
+		 //load this for test, in case you need it for a specific post only
 		//$raw = array ( get_post( 8180 ));
 
 		$args = array (
@@ -969,7 +968,7 @@ abstract class Keyring_Reactions_Base {
 
 		Keyring_Util::debug($r);
 
-		return true;
+		return $comment_id;
 	}
 
 }
