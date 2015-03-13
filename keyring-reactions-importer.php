@@ -2,11 +2,16 @@
 /*
 Plugin Name: Keyring Reactions Importer
 Plugin URI: https://github.com/petermolnar/keyring-reactions-importer
-Description:
+Description: A recations (comments, favs, etc. ) importer based on Keyring
 Version: 0.1
 Author: Peter Molnar <hello@petermolnar.eu>
 Author URI: http://petermolnar.eu/
 License: GPLv3
+*/
+
+/*
+    This plugin could never had been done without [Keyring Social Importers](https://wordpress.org/plugins/keyring-social-importers/) and [Keyring](https://wordpress.org/plugins/keyring/) from [Beau Lebens](http://dentedreality.com.au/).
+    Thank you!
 */
 
 /*  Copyright 2010-2014 Peter Molnar ( hello@petermolnar.eu )
@@ -32,17 +37,16 @@ if ( !function_exists( 'register_importer ' ) )
 abstract class Keyring_Reactions_Base {
 	// Make sure you set all of these in your importer class
 	const SLUG              = '';    // should start with letter & should only contain chars valid in javascript function name
-	const LABEL             = '';    // e.g. 'Twitter'
+	const LABEL             = '';    // the line that will show up in Import page
 	const KEYRING_NAME      = '';    // Keyring service name; SLUG is not used to avoid conflict with Keyring Social Importer
 	const KEYRING_SERVICE   = '';    // Full class name of the Keyring_Service this importer requires
-	const REQUESTS_PER_LOAD = 3;     // How many remote requests should be made before reloading the page?
+	const REQUESTS_PER_LOAD = 3;     // How many posts should queried before moving over to the next branch / reload the page
 	const KEYRING_VERSION   = '1.4'; // Minimum version of Keyring required
-	const CACHE             = false;
-	const SILONAME          = '';
 
-	const OPTNAME_POSTPOS   = 'post_todo';
-	const OPTNAME_LOG       = 'log';
-	const OPTNAME_POSTS     = 'posts';
+	const SILONAME          = '';    // identifier for the silo in the syndication_url field entry
+
+	const OPTNAME_POSTPOS   = 'post_todo';  // options key for next post id in posts array
+	const OPTNAME_POSTS     = 'posts';      // option key for posts array
 
 	const SCHEDULE          = 'daily'; // this may break many things, careful if you wish to change it
 	const SCHEDULETIME      = 36400;   // in tandem with the previous
@@ -61,7 +65,7 @@ abstract class Keyring_Reactions_Base {
 	var $methods            = array(); // method name for functions => comment type to store with
 	var $schedule           = '';
 
-	function __construct() {
+	public function __construct() {
 		// Can't do anything if Keyring is not available.
 		// Prompt user to install Keyring (if they can), and bail
 		if ( !defined( 'KEYRING__VERSION' ) || version_compare( KEYRING__VERSION, static::KEYRING_VERSION, '<' ) ) {
@@ -73,7 +77,7 @@ abstract class Keyring_Reactions_Base {
 			return false;
 		}
 
-		// Set some vars
+		// Set some internal vars
 		$this->optname = 'keyring-' . static::SLUG;
 		$this->schedule = $this->optname . '_import_auto';
 
@@ -83,9 +87,14 @@ abstract class Keyring_Reactions_Base {
 		// Add a Keyring handler to push us to the next step of the importer once connected
 		add_action( 'keyring_connection_verified', array( &$this, 'verified_connection' ), 10, 2 );
 
-		//
+		// additional comment types
+		add_action('admin_comment_types_dropdown', array(&$this, 'comment_types_dropdown'));
+
+		// additional cron schedules
 		add_filter( 'cron_schedules', array(&$this, 'cron' ));
 
+		// additional avatar filter
+		add_filter( 'get_avatar' , 'Keyring_Reactions_Base::get_avatar' , 1 , 5 );
 
 		// If a request is made for a new connection, pass it off to Keyring
 		if (
@@ -112,38 +121,14 @@ abstract class Keyring_Reactions_Base {
 		if ( $this->get_option( 'auto_import' ) && !wp_get_schedule( $this->schedule ) )
 			wp_schedule_event( time(), static::SCHEDULE, $this->schedule );
 
-
+		// jump to the first worker
 		$this->handle_request();
 	}
-
-	function cron ( $schedules ) {
-		if (!isset($schedules[ $this->optname ])) {
-			$schedules[ $this->optname ] = array(
-				'interval' => static::RESCHEDULE,
-				'display' => sprintf(__( '%s auto import' ), static::SLUG )
-			);
-		}
-		return $schedules;
-	}
-
-	/**
-	 * Accept the form submission of the Options page and handle all of the values there.
-	 * You'll need to validate/santize things, and probably store options in the DB. When you're
-	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
-	 */
-	abstract function handle_request_options();
-
-	/**
-	 * Based on whatever you need, create the URL for the next request to the remote Service.
-	 * Most likely this will need to grab options from the DB.
-	 * @return String containing the URL
-	 */
-	abstract function make_all_requests( $method, $post );
 
 	/**
 	 * Singleton mode on
 	 */
-	static function &init() {
+	static public function &init() {
 		static $instance = false;
 
 		if ( !$instance ) {
@@ -155,9 +140,89 @@ abstract class Keyring_Reactions_Base {
 	}
 
 	/**
+	* Extend the "filter by comment type" of in the comments section
+	* of the admin interface with all of our methods
+	*
+	* @param array $types the different comment types
+	*
+	* @return array the filtered comment types
+	*/
+	public function comment_types_dropdown($types) {
+		foreach ($this->methods as $method => $type ) {
+			if (!isset($types[ $type ]))
+				$types[ $type ] = ucfirst( $type );
+		}
+		return $types;
+	}
+
+	/**
+	 * add our own, ridiculously intense schedule for chanining all the requests
+	 * wee need for the imports
+	 *
+	 * @param array $schedules the current schedules in WP CRON
+	 *
+	 * @return array the filtered WP CRON schedules
+	 */
+	public function cron ( $schedules ) {
+		if (!isset($schedules[ $this->optname ])) {
+			$schedules[ $this->optname ] = array(
+				'interval' => static::RESCHEDULE,
+				'display' => sprintf(__( '%s auto import' ), static::SLUG )
+			);
+		}
+		return $schedules;
+	}
+
+	/**
+	 * of there is a comment meta 'avatar' field, use that as avatar for the commenter
+	 *
+	 * @param string $avatar the current avatar image string
+	 * @param mixed $id_or_email this could be anything that triggered the avatar all
+	 * @param string $size size for the image to display
+	 * @param string $default optional fallback
+	 * @param string $alt alt text for the avatar image
+	 */
+	public static function get_avatar($avatar, $id_or_email, $size, $default = '', $alt = '') {
+		if (!is_object($id_or_email) || !isset($id_or_email->comment_type))
+			return $avatar;
+
+
+		// check if comment has an avatar
+		$c_avatar = get_comment_meta($id_or_email->comment_ID, 'avatar', true);
+
+		if (!$c_avatar)
+			return $avatar;
+
+		if (false === $alt)
+			$safe_alt = '';
+		else
+			$safe_alt = esc_attr($alt);
+
+		return sprintf( '<img alt="%s" src="%s" class="avatar avatar-%s photo u-photo" />', $safe_alt, $c_avatar, $size );
+	}
+
+	/**
+	 * Accept the form submission of the Options page and handle all of the values there.
+	 * You'll need to validate/santize things, and probably store options in the DB. When you're
+	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
+	 */
+	abstract protected function handle_request_options();
+
+	/**
+	 * This step will do all the required calls for a specific method for a
+	 * specific post, parse them and insert them into the DB as comments.
+	 *
+	 * @param string $method the method to call and work with (eg. favs, comments)
+	 * @param post $post WP Post object
+	 *
+	 * @return None
+	 */
+	abstract protected function make_all_requests( $method, $post );
+
+	/**
 	 * Warn the user that they need Keyring installed and activated.
 	 */
-	function require_keyring() {
+	protected function require_keyring() {
 		global $keyring_required; // So that we only send the message once
 
 		if ( 'update.php' == basename( $_SERVER['REQUEST_URI'] ) || $keyring_required )
@@ -183,7 +248,7 @@ abstract class Keyring_Reactions_Base {
 	 * @param mixed $default What to return if the option requested isn't available, defaults to false
 	 * @return mixed
 	 */
-	function get_option( $name, $default = false ) {
+	protected function get_option( $name, $default = false ) {
 		if ( isset( $this->options[ $name ] ) )
 			return $this->options[ $name ];
 		return $default;
@@ -198,7 +263,7 @@ abstract class Keyring_Reactions_Base {
 	 * @param mixed $name String for a name/value pair, array for a collection of options, or null to reset everything
 	 * @param mixed $val The value to set this option to
 	 */
-	function set_option( $name, $val = null ) {
+	protected function set_option( $name, $val = null ) {
 		if ( is_array( $name ) )
 			$this->options = array_merge( (array) $this->options, $name );
 		else if ( is_null( $name ) && is_null( $val ) ) // $name = null to reset all options
@@ -214,7 +279,7 @@ abstract class Keyring_Reactions_Base {
 	/**
 	 * Reset all options for this importer
 	 */
-	function reset() {
+	protected function reset() {
 		$this->set_option( null );
 	}
 
@@ -222,7 +287,7 @@ abstract class Keyring_Reactions_Base {
 	 * Early handling/validation etc of requests within the importer. This is hooked in early
 	 * enough to allow for redirecting the user if necessary.
 	 */
-	function handle_request() {
+	protected function handle_request() {
 		// Only interested in POST requests and specific GETs
 		if ( empty( $_GET['import'] ) || static::SLUG != $_GET['import'] )
 			return;
@@ -251,7 +316,6 @@ abstract class Keyring_Reactions_Base {
 				$this->set_option( array(
 					'auto_import'           => null,
 					'auto_approve'          => null,
-					static::OPTNAME_LOG     => '',
 					static::OPTNAME_POSTS   => array(),
 					static::OPTNAME_POSTPOS => 0,
 				) );
@@ -284,7 +348,7 @@ abstract class Keyring_Reactions_Base {
 	/**
 	 * Decide which UI to display to the user, kind of a second-stage of handle_request().
 	 */
-	function dispatch() {
+	public function dispatch() {
 		// Don't allow access to ::options() unless a service/token are set
 		if ( !$this->service || !$this->service->get_token() ) {
 			$this->step = 'greet';
@@ -315,14 +379,14 @@ abstract class Keyring_Reactions_Base {
 	 *
 	 * @param string $str The error message to display to the user
 	 */
-	function error( $str ) {
+	protected function error( $str ) {
 		$this->errors[] = $str;
 	}
 
 	/**
 	 * A default, basic header for the importer UI
 	 */
-	function header() {
+	protected function header() {
 		?>
 		<style type="text/css">
 			.keyring-importer ul,
@@ -345,7 +409,7 @@ abstract class Keyring_Reactions_Base {
 	/**
 	 * Default, basic footer for importer UI
 	 */
-	function footer() {
+	protected function footer() {
 		echo '</div>';
 	}
 
@@ -354,7 +418,7 @@ abstract class Keyring_Reactions_Base {
 	 * them to either select an existing Keyring token or start the process of creating a new one.
 	 * Also makes sure they have the correct service available, and that it's configured correctly.
 	 */
-	function greet() {
+	protected function greet() {
 		if ( method_exists( $this, 'full_custom_greet' ) ) {
 			$this->full_custom_greet();
 			return;
@@ -412,7 +476,7 @@ abstract class Keyring_Reactions_Base {
 	 *
 	 * @param array $request The $_REQUEST made after completing the Keyring connection process
 	 */
-	function verified_connection( $service, $id ) {
+	public function verified_connection( $service, $id ) {
 		// Only handle connections that were for us
 		global $keyring_request_token;
 
@@ -437,7 +501,8 @@ abstract class Keyring_Reactions_Base {
 	 * Once a connection is selected/created, this UI allows the user to select
 	 * the details of their imported tweets.
 	 */
-	function options() {
+	protected function options() {
+		// in case there is a fully customized page for options, use that instead
 		if ( method_exists( $this, 'full_custom_options' ) ) {
 			$this->full_custom_options();
 			return;
@@ -515,12 +580,18 @@ abstract class Keyring_Reactions_Base {
 	}
 
 	/**
-	 * Handle a cron request to import "the latest" content for this importer. Should
-	 * rely solely on database state of some sort, since nothing is passed in. Make
-	 * sure to also update anything in the DB required for the next run. If you set up your
-	 * other methods "discretely" enough, you might not need to override this.
+	 * Handle a cron request to pick up importing reactions from where we left off.
+	 * Since the posts array & the post pointer stays untouched until the import
+	 * job if finished, we'll just continuing the import for the next post to process.
+	 *
+	 * We cannot do the whole import in one batch - there could be a massive amount
+	 * of posts to check reactions for - so we reschedule the job to start
+	 * immediately after eachother.
+	 * We're also not using the batch mode (X posts per page load) but instead
+	 * one-by-one so one iteration of the WP CRON event will not take that long
+	 * and may not cause issues later on.
 	 */
-	function do_auto_import() {
+	public function do_auto_import() {
 		defined( 'WP_IMPORTING' ) or define( 'WP_IMPORTING', true );
 		do_action( 'import_start' );
 		set_time_limit( 0 );
@@ -546,7 +617,7 @@ abstract class Keyring_Reactions_Base {
 
 		if ( !$this->finished ) {
 
-			$position = $this->get_option('post_todo', 0);
+			$position = $this->get_option( static::OPTNAME_POSTPOS, 0);
 			if ( !is_array($this->posts) || !isset($this->posts[$position]) )
 				return new Keyring_Error(
 					'keyring-reactions-post-not-set',
@@ -561,7 +632,7 @@ abstract class Keyring_Reactions_Base {
 				$msg = sprintf(__('Processing %s for post #%s', 'keyring'), $method, $todo['post_id']);
 				Keyring_Util::debug($msg);
 
-				$result = $this->make_request( $method, $todo );
+				$result = $this->make_all_requests( $method, $todo );
 
 				if ( Keyring_Util::is_error( $result ) )
 					print $result;
@@ -575,14 +646,15 @@ abstract class Keyring_Reactions_Base {
 				$this->cleanup();
 				Keyring_Util::debug( static::SLUG . ' auto import finished' );
 
-				// set the original, daily schedule back for tomorrow from now on
+				// set the original schedule, starting with the defined next offset
 				wp_reschedule_event( time() + static::SCHEDULETIME, static::SCHEDULE , $this->schedule );
 			}
+			// we're not finished yet
 			else {
-				$this->set_option('post_todo', $next );
+				$this->set_option( static::OPTNAME_POSTPOS, $next );
 				Keyring_Util::debug( static::SLUG . ' auto import: there is more coming' );
 
-				// hack the planet: the next run of this very job should be
+				// the next run of this very job should be
 				// near immediate, otherwise we'd never finish with all the post;
 				// event this way a few thousand posts will result in issues
 				// for sure, so there has to be something
@@ -625,11 +697,14 @@ abstract class Keyring_Reactions_Base {
 	}
 
 	/**
-	 * Grab a chunk of data from the remote service and process it into comments, and handle actually importing as well.
-	 * Keeps track of 'state' in the DB.
+	 * Iterate through X of the matching posts and pull reactions for them before
+	 * reloading the page or finishing up.
+	 * Since there is no persistent cache by default in WP we're using the DB to
+	 * store the current pointer of which post should be done next on the posts
+	 * array which is also stored in the DB (until the import is done and the
+	 * array & the pointer is resetted ).
 	 */
 	function import() {
-		$this->set_option('log', array());
 		defined( 'WP_IMPORTING' ) or define( 'WP_IMPORTING', true );
 		do_action( 'import_start' );
 		$num = 0;
@@ -643,13 +718,15 @@ abstract class Keyring_Reactions_Base {
 
 		while ( !$this->finished && $num < static::REQUESTS_PER_LOAD ) {
 			echo "<p>";
-			$position = $this->get_option('post_todo', 0);
+			$position = $this->get_option( static::OPTNAME_POSTPOS, 0);
 
-			if ( !is_array($this->posts) || !isset($this->posts[$position]) )
+			if ( !is_array($this->posts) || !isset($this->posts[$position]) ) {
+				$this->cleanup();
 				return new Keyring_Error(
 					'keyring-reactions-post-not-set',
-					__( 'The post to work with does not exist in the posts array. Something is definitely wrong.', 'keyring' )
+					__( 'The post to work with does not exist in the posts array. Something is definitely wrong. I\'m resetting myself now, please try importing again.', 'keyring' )
 				);
+			}
 
 			$todo = $this->posts[$position];
 
@@ -657,7 +734,7 @@ abstract class Keyring_Reactions_Base {
 				$msg = sprintf(__('Processing %s for post <strong>#%s</strong><br />', 'keyring'), $method, $todo['post_id']);
 				Keyring_Util::debug($msg);
 				echo $msg;
-				$result = $this->make_request( $method, $todo );
+				$result = $this->make_all_requests( $method, $todo );
 
 				if ( Keyring_Util::is_error( $result ) )
 					print $result;
@@ -670,7 +747,7 @@ abstract class Keyring_Reactions_Base {
 				break;
 			}
 
-			$this->set_option('post_todo', $next );
+			$this->set_option( static::OPTNAME_POSTPOS, $next );
 			$num+=1;
 
 		}
@@ -686,18 +763,6 @@ abstract class Keyring_Reactions_Base {
 
 		do_action( 'import_end' );
 		return true;
-	}
-
-
-	/**
-	 * Super-basic implementation of making the (probably) authorized request. You can (should)
-	 * override this with something more substantial and suitable for the service you're working with.
-	 * @return Keyring request response -- either a Keyring_Error or a Service-specific data structure (probably object or array)
-	 */
-	function make_request( $method, $post ) {
-		return $this->make_all_requests( $method, $post );
-		//$url = $this->build_request_url( $method, $post );
-		//return $this->service->request( $url, array( 'method' => $this->request_method, 'timeout' => 10 ) );
 	}
 
 	/**
@@ -748,37 +813,43 @@ abstract class Keyring_Reactions_Base {
 	 */
 	function done() {
 		$this->header();
-		echo '<p>' . sprintf( __( 'Import log: %s', 'keyring' ), join("\n",$this->get_option( 'log' )) )  . '</p>';
-		//echo '<p>' . sprintf( __( 'Imported a total of %s posts.', 'keyring' ), number_format( $this->get_option( 'imported' ) ) ) . '</p>';
-		//echo '<h3>' . sprintf( __( 'All done. <a href="%2$s">Check out all your new comments</a>.', 'keyring' ), admin_url( 'comments.php' ) ) . '</h3>';
+		echo '<h2>' . __( 'All done!', 'keyring' ) . '</h2>';
+		echo '<h3>' . sprintf( __( '<a href="%s">Check out all your new comments</a>.', 'keyring' ), admin_url( 'comments.php' ) ) . '</h3>';
 		$this->footer();
 		$this->cleanup();
-		//do_action( 'import_done', $this->optname );
-		//do_action( 'keyring_import_done', $this->optname );
+		do_action( 'import_done', $this->optname );
+		do_action( 'keyring_import_done', $this->optname );
 	}
 
 	/**
 	 * reset internal variables
 	 */
 	function cleanup() {
-		$this->set_option( 'log', array() );
-		$this->set_option( 'posts', array() );
-		$this->set_option( 'post_todo', 0 );
+		$this->set_option( static::OPTNAME_POSTS, array() );
+		$this->set_option( static::OPTNAME_POSTPOS , 0 );
 	}
 
 	/**
-	 * gets all posts with their syndicated url matching self::SILONAME
+	 * Gets all posts with their syndicated url matching self::SILONAME
+	 * The matching posts will be stored in the DB because we need them in between
+	 * page loads and from scheduled cron events.
+	 * Then the import is finished for all the posts, the entry will be nulled.
 	 *
 	 */
 	function get_posts ( ) {
-		$posts = $this->get_option('posts');
+		$posts = $this->get_option( static::OPTNAME_POSTS );
 
 		// we are in the middle of a run
 		if (!empty($posts)) {
 			$this->posts = $posts;
 			return true;
 		}
+		/*
+		 * load this for test, in case you need it for a specific post only
+		 */
+		$raw = array ( get_post( 8180 ));
 
+		/*
 		$args = array (
 			'meta_key' => 'syndication_urls',
 			'post_type' => 'any',
@@ -786,6 +857,10 @@ abstract class Keyring_Reactions_Base {
 			'post_status' => 'publish',
 		);
 		$raw = get_posts( $args );
+
+		*/
+
+
 
 		foreach ( $raw as $p ) {
 			$syndication_urls = get_post_meta ( $p->ID, 'syndication_urls', true );
@@ -798,7 +873,6 @@ abstract class Keyring_Reactions_Base {
 						$posts[] = array (
 							'post_id' => $p->ID,
 							'syndication_url' => $url,
-							//'comment_hashes' => $hashes,
 						);
 					}
 				}
@@ -806,16 +880,19 @@ abstract class Keyring_Reactions_Base {
 		}
 
 		$this->posts = $posts;
-		$this->set_option('posts', $posts);
-		return true;
+		$this->set_option( static::OPTNAME_POSTS, $posts);
 	}
 
 	/**
-	 * this is to keep it DRY
+	 * Comment inserter
+	 *
+	 * @param string &$post_id post ID
+	 * @param array &$comment array formatted to match a WP Comment requirement
+	 * @param mixed &$raw Raw format of the comment, like JSON response from the provider
+	 * @param string &$avatar Avatar string to be stored as comment meta
 	 *
 	 */
 	function insert_comment ( &$post_id, &$comment, &$raw, &$avatar = '' ) {
-		$post = get_post ($post_id);
 
 		//test if we already have this imported
 		$args = array(
@@ -823,18 +900,58 @@ abstract class Keyring_Reactions_Base {
 			'post_id' => $post_id,
 		);
 
-		Keyring_Util::debug(sprintf(__('checking comment existence for %s for post #%s','keyring'), $comment['comment_author_email'], $post_id));
-		// so if the type is comment and you add type = 'comment'
-		// WP will not return the comments
-		// WordPress, such logical!
+		// so if the type is comment and you add type = 'comment', WP will not return the comments
+		// such logical!
 		if ( $comment['comment_type'] != 'comment')
 			$args['type'] = $comment['comment_type'];
 
+		// in case it's a fav or a like, the date field is not always present
+		// but there should be only one of those, so the lack of a date field indicates
+		// that we should not look for a date when checking the existence of the
+		// comment
+		if ( isset( $comment['comment_date']) && !empty($comment['comment_date']) ) {
+			// in case you're aware of a nicer way of doing this, please tell me
+			// or commit a change...
+			$tmp = explode ( " ", $comment['comment_date'] );
+			$d = explode( "-", $tmp[0]);
+			$t = explode (':',$tmp[1]);
+
+			$args['date_query'] = array(
+				'year'     => $d[0],
+				'monthnum' => $d[1],
+				'day'      => $d[2],
+				'hour'     => $t[0],
+				'minute'   => $t[1],
+				'second'   => $t[2],
+			);
+
+			//test if we already have this imported
+			Keyring_Util::debug(sprintf(__('checking comment existence for %s (with date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
+		}
+		else {
+			// we do need a date
+			$comment['comment_date'] = date("Y-m-d H:i:s");
+			$comment['comment_date_gmt'] = date("Y-m-d H:i:s");
+
+			//test if we already have this imported
+			Keyring_Util::debug(sprintf(__('checking comment existence for %s (no date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
+		}
+
 		$existing = get_comments($args);
 
+		// no matching comment yet, insert it
 		if (empty($existing)) {
+
+			// disable flood control, just in case
+			remove_filter('check_comment_flood', 'check_comment_flood_db', 10, 3);
+
 			Keyring_Util::debug(sprintf(__('inserting comment for post #%s','keyring'), $post_id));
+
 			// add comment
+			// DON'T use wp_new_comment - if there are like ~1k reactions,
+			// Akismet, flood control, mail notifications & all would kick in
+			// and no one wants thousands of mails sent from their WordPress
+			// because that is usually a hacked system indicator
 			if ( $comment_id = wp_insert_comment($comment) ) {
 				// add avatar for later use if present
 				if (!empty($avatar)) {
@@ -845,46 +962,19 @@ abstract class Keyring_Reactions_Base {
 				update_comment_meta( $comment_id, $this->optname, $raw );
 
 				// info
-				$r = sprintf (__("New %s #%s from %s imported from %s for post %s", 'keyring'), $comment['comment_type'], $comment_id, $comment['comment_author'], self::SILONAME, $post->post_title );
+				$r = sprintf (__("New %s #%s from %s imported from %s for #%s", 'keyring'), $comment['comment_type'], $comment_id, $comment['comment_author'], self::SILONAME, $post_id );
 			}
+			// re-add flood control
+			add_filter('check_comment_flood', 'check_comment_flood_db', 10, 3);
 		}
 		else {
 				// info
-				$r = sprintf (__("Already exists: %s from %s for %s", 'keyring'), $comment['comment_type'], $comment['comment_author'], $post->post_title );
+				$r = sprintf (__("Already exists: %s from %s for #%s", 'keyring'), $comment['comment_type'], $comment['comment_author'], $post_id );
 		}
 
 		Keyring_Util::debug($r);
 
 		return true;
-	}
-
-	/**
-	 * syslog log message
-	 *
-	 * @param string $identifier process identifier, falls back to FILE is empty
-	 * @param string $message message to add besides basic info, falls back to LINE if empty
-	 * @param int $log_level [optional] Level of log, info by default
-	 *
-	 */
-	static public function syslog ( $message = __LINE__ , $log_level = LOG_INFO ) {
-
-		if ( function_exists( 'syslog' ) && function_exists ( 'openlog' ) ) {
-			if ( @is_array( $message ) || @is_object ( $message ) )
-				$message = json_encode($message);
-
-			$message = strip_tags ( $message );
-
-			switch ( $log_level ) {
-				case LOG_ERR :
-					openlog('wordpress('.$_SERVER['HTTP_HOST'].')',LOG_NDELAY|LOG_PERROR,LOG_SYSLOG);
-					break;
-				default:
-					openlog('wordpress(' .$_SERVER['HTTP_HOST']. ')', LOG_NDELAY,LOG_SYSLOG);
-					break;
-			}
-
-			syslog( $log_level , ' Keyring Reactions Importer: ' . $message );
-		}
 	}
 
 }

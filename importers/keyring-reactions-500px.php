@@ -17,17 +17,12 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 		$this->methods = array (
 			// method name => comment type
 			'votes' => 'like',
-			'favs'  => 'bookmark',
+			'favs'  => 'favorite',
 			'comments' => 'comment'
 		);
-		add_filter( 'get_avatar' , 'Keyring_500px_Reactions::avatar' , 1 , 5 );
 
 		//$this->methods = array ('votes', 'favs', 'comments');
 		parent::__construct();
-	}
-
-	static public function avatar ( $avatar, $id_or_email, $size, $default, $alt ) {
-		return $avatar;
 	}
 
 	/**
@@ -58,7 +53,12 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 		}
 	}
 
-
+	/**
+	 * implementation for all the requests for one method of one post
+	 *
+	 * the reason why this is here and not in the base class is that getting the
+	 * id out of the syndication link my be pretty tricky and be silo specific
+	 */
 	function make_all_requests( $method, $post ) {
 		extract($post);
 
@@ -94,9 +94,9 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 
 	/**
 	 * VOTES (LIKES)
+	 *
 	 */
-
-	function get_votes ( $post_id, $photo_id ) {
+	function get_votes ( &$post_id, &$photo_id ) {
 		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/votes", $photo_id);
 
 		$res = $this->request ( $baseurl, 'users' );
@@ -110,8 +110,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	/**
 	 * FAVS
 	 */
-
-	function get_favs ( $post_id, $photo_id ) {
+	function get_favs ( &$post_id, &$photo_id ) {
 		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/favorites", $photo_id);
 		$res = $this->request ( $baseurl, 'users' );
 
@@ -146,8 +145,9 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 					'comment_author_email'  => $email,
 					'comment_post_ID'       => $post_id,
 					'comment_type'          => $type,
-					'comment_date'          => date("Y-m-d H:i:s"),
-					'comment_date_gmt'      => date("Y-m-d H:i:s"),
+					// DON'T set the date unless it's provided - not with favs & votes
+					//'comment_date'          => date("Y-m-d H:i:s"),
+					//'comment_date_gmt'      => date("Y-m-d H:i:s"),
 					'comment_agent'         => get_class($this),
 					'comment_approved'      => $auto,
 					'comment_content'       => sprintf( $content_template, $author_url, $name ),
@@ -162,8 +162,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	/**
 	 * COMMENTS
 	 */
-
-	function get_comments ( $post_id, $photo_id ) {
+	function get_comments ( &$post_id, &$photo_id ) {
 		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/comments", $photo_id);
 
 		$results = $this->request ( $baseurl, 'comments' );
