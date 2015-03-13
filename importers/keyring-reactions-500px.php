@@ -74,7 +74,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 				__( 'Missing syndication URL.', 'keyring')
 			);
 
-		$photo_id = end((explode('/', rtrim($syndication_url, '/'))));
+		$photo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
 		if (empty($photo_id))
 			return new Keyring_Error(
 				'keyring-500px-reactions-photo-id-not-found',
@@ -100,7 +100,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/votes", $photo_id);
 
 		$res = $this->request ( $baseurl, 'users' );
-		$tpl = __( '<a href="%s" rel="nofollow">%s</a> likes this photo on <a href="https://500px.com" rel="nofollow">500px.com</a>','keyring');
+		$tpl = __( '<a href="%s" rel="nofollow">%s</a> liked this photo on <a href="https://500px.com" rel="nofollow">500px.com</a>','keyring');
 
 		$this->parser_fav_vote ( $post_id, $res, 'votes', $tpl );
 

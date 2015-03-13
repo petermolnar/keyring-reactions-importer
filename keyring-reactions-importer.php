@@ -118,8 +118,9 @@ abstract class Keyring_Reactions_Base {
 		}
 
 		// Make sure we have a scheduled job to handle auto-imports if enabled
+		// but delay it for good reasons
 		if ( $this->get_option( 'auto_import' ) && !wp_get_schedule( $this->schedule ) )
-			wp_schedule_event( time(), static::SCHEDULE, $this->schedule );
+			wp_schedule_event( time() + static::SCHEDULETIME, static::SCHEDULE, $this->schedule );
 
 		// jump to the first worker
 		$this->handle_request();
@@ -186,7 +187,6 @@ abstract class Keyring_Reactions_Base {
 		if (!is_object($id_or_email) || !isset($id_or_email->comment_type))
 			return $avatar;
 
-
 		// check if comment has an avatar
 		$c_avatar = get_comment_meta($id_or_email->comment_ID, 'avatar', true);
 
@@ -198,7 +198,7 @@ abstract class Keyring_Reactions_Base {
 		else
 			$safe_alt = esc_attr($alt);
 
-		return sprintf( '<img alt="%s" src="%s" class="avatar avatar-%s photo u-photo" />', $safe_alt, $c_avatar, $size );
+		return sprintf( '<img alt="%s" src="%s" class="avatar photo u-photo" style="width: %spx; height: %spx;" />', $safe_alt, $c_avatar, $size, $size );
 	}
 
 	/**
@@ -266,8 +266,10 @@ abstract class Keyring_Reactions_Base {
 	protected function set_option( $name, $val = null ) {
 		if ( is_array( $name ) )
 			$this->options = array_merge( (array) $this->options, $name );
-		else if ( is_null( $name ) && is_null( $val ) ) // $name = null to reset all options
+		else if ( is_null( $name ) && is_null( $val ) ) { // $name = null to reset all options
 			$this->options = array();
+			wp_unschedule_event( time(), $this->schedule );
+		}
 		else if ( is_null( $val ) && isset( $this->options[ $name ] ) )
 			unset( $this->options[ $name ] );
 		else
@@ -814,7 +816,7 @@ abstract class Keyring_Reactions_Base {
 	function done() {
 		$this->header();
 		echo '<h2>' . __( 'All done!', 'keyring' ) . '</h2>';
-		echo '<h3>' . sprintf( __( '<a href="%s">Check out all your new comments</a>.', 'keyring' ), admin_url( 'comments.php' ) ) . '</h3>';
+		echo '<h3>' . sprintf( __( '<a href="%s">Check out all your new comments</a>.', 'keyring' ), admin_url( 'edit-comments.php' ) ) . '</h3>';
 		$this->footer();
 		$this->cleanup();
 		do_action( 'import_done', $this->optname );
@@ -887,6 +889,8 @@ abstract class Keyring_Reactions_Base {
 	 *
 	 */
 	function insert_comment ( &$post_id, &$comment, &$raw, &$avatar = '' ) {
+
+		$comment_id = false;
 
 		//test if we already have this imported
 		$args = array(

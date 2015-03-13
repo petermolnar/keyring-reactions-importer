@@ -68,7 +68,7 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 				__( 'Missing syndication URL.', 'keyring')
 			);
 
-		$photo_id = end((explode('/', rtrim($syndication_url, '/'))));
+		$photo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
 		if (empty($photo_id))
 			return new Keyring_Error(
 				'keyring-flickr-reactions-photo-id-not-found',

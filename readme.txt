@@ -1,6 +1,6 @@
 === Keyring Reactions Importer ===
 Contributors: cadeyrn
-Tags: flickr, 500px, backfeed, indieweb, comments, likes, favorites
+Tags: facebook, flickr, 500px, backfeed, indieweb, comments, likes, favorites
 Requires at least: 3.0
 Tested up to: 4.1
 Stable tag: 0.2
@@ -17,8 +17,9 @@ Using the `syndication_urls` post meta field populated by either the [Syndicatio
 
 Currently supported networks:
 
-* [500px](http://500px.com/) - comments, favs, likes
-* [Flickr](http://flickr.com/) - comments, favs
+* [500px](https://500px.com/) - comments, favs, likes
+* [Flickr](https://flickr.com/) - comments, favs
+* [Facebook](https://facebook.com/) - comments, likes
 
 The plugin uses the brilliant  [Keyring](https://wordpress.org/plugins/keyring/) for handling networks and us based on [Keyring Social Importers](https://wordpress.org/plugins/keyring-social-importers/); both from [Beau Lebens](http://dentedreality.com.au/).
 
@@ -30,6 +31,7 @@ The plugin uses the brilliant  [Keyring](https://wordpress.org/plugins/keyring/)
 *2015-03-13*
 
 * adding Flickr
+* adding Facebook
 
 = 0.1 =
 *2015-03-12*
