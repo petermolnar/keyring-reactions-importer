@@ -29,7 +29,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	 * Accept the form submission of the Options page and handle all of the values there.
 	 * You'll need to validate/santize things, and probably store options in the DB. When you're
 	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
-	 */
+	 *
  	function handle_request_options() {
 		$bools = array('auto_import','auto_approve');
 
@@ -49,9 +49,10 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 				'auto_approve'    => (bool) $_POST['auto_approve'],
 			) );
 
-			$this->step = 'import';
+			$this->step = 'options';
 		}
 	}
+	*/
 
 	/**
 	 * implementation for all the requests for one method of one post

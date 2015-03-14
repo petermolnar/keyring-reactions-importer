@@ -206,7 +206,29 @@ abstract class Keyring_Reactions_Base {
 	 * You'll need to validate/santize things, and probably store options in the DB. When you're
 	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
 	 */
-	abstract protected function handle_request_options();
+	protected function handle_request_options() {
+		$bools = array('auto_import','auto_approve');
+
+		foreach ( $bools as $bool ) {
+			if ( isset( $_POST[$bool] ) )
+				$_POST[$bool] = true;
+			else
+				$_POST[$bool] = false;
+		}
+
+		// If there were errors, output them, otherwise store options and start importing
+		if ( count( $this->errors ) ) {
+			$this->step = 'greet';
+		} else {
+			$this->set_option( array(
+				'auto_import'     => (bool) $_POST['auto_import'],
+				'auto_approve'    => (bool) $_POST['auto_approve'],
+				'limit_posts'    => $_POST['limit_posts'],
+			) );
+
+			$this->step = 'import';
+		}
+	}
 
 	/**
 	 * This step will do all the required calls for a specific method for a
@@ -316,8 +338,9 @@ abstract class Keyring_Reactions_Base {
 			} else {
 				// Otherwise reset all default/built-ins
 				$this->set_option( array(
-					'auto_import'           => null,
-					'auto_approve'          => null,
+					'auto_import'           => false,
+					'auto_approve'          => false,
+					'limit_posts'           => '',
 					static::OPTNAME_POSTS   => array(),
 					static::OPTNAME_POSTPOS => 0,
 				) );
@@ -342,6 +365,13 @@ abstract class Keyring_Reactions_Base {
 			// to handle processing/storing options for import. Make sure to
 			// end it with $this->step = 'import' (if you're ready to continue)
 			$this->handle_request_options();
+			if ( method_exists( $this, 'full_custom_request_options' ) ) {
+				$this->handle_request_options();
+				return;
+			}
+			else {
+				$this->handle_request_options();
+			}
 
 			break;
 		}
@@ -534,6 +564,30 @@ abstract class Keyring_Reactions_Base {
 					</th>
 					<td>
 						<strong><?php echo $this->service->get_token()->get_display(); ?></strong>
+					</td>
+				</tr>
+				<tr valign="top">
+					<th scope="row">
+						<label for="limit_posts"><?php _e( 'Limit posts to check reaction for', 'keyring' ) ?></label>
+					</th>
+					<td>
+						<select name="limit_posts" id="limit_posts">
+							<?php $opt = "1 day" ?>
+							<option value="<?php echo $opt ?>" <?php echo selected( $this->get_option( 'limit_posts', '' ) == $opt );?>><?php _e("Yesterday", 'keyring') ?></option>
+							<?php $opt = "1 week" ?>
+							<option value="<?php echo $opt ?>" <?php echo selected( $this->get_option( 'limit_posts', '' ) == $opt );?>><?php _e("Last week", 'keyring') ?></option>
+							<?php $opt = "2 weeks" ?>
+							<option value="<?php echo $opt ?>" <?php echo selected( $this->get_option( 'limit_posts', '' ) == $opt );?>><?php _e("Last 2 weeks", 'keyring') ?></option>
+							<?php $opt = "1 month" ?>
+							<option value="<?php echo $opt ?>" <?php echo selected( $this->get_option( 'limit_posts', '' ) == $opt );?>><?php _e("Last month", 'keyring') ?></option>
+							<?php $opt = "6 months" ?>
+							<option value="<?php echo $opt ?>" <?php echo selected( $this->get_option( 'limit_posts', '' ) == $opt );?>><?php _e("Last 6 month", 'keyring') ?></option>
+							<?php $opt = "" ?>
+							<?php $opt = "1 year" ?>
+							<option value="<?php echo $opt ?>" <?php echo selected( $this->get_option( 'limit_posts', '' ) == $opt );?>><?php _e("Last year", 'keyring') ?></option>
+							<?php $opt = "" ?>
+							<option value="<?php echo $opt ?>" <?php echo selected( $this->get_option( 'limit_posts', '' ) == $opt );?>><?php _e("Don't limit", 'keyring') ?></option>
+						</select>
 					</td>
 				</tr>
 				<tr valign="top">
@@ -851,11 +905,22 @@ abstract class Keyring_Reactions_Base {
 		//$raw = array ( get_post( 8180 ));
 
 		$args = array (
-			'meta_key' => 'syndication_urls',
-			'post_type' => 'any',
-			'posts_per_page' => -1,
-			'post_status' => 'publish',
+			'meta_key'         => 'syndication_urls',
+			'post_type'        => 'any',
+			'posts_per_page'   => -1,
+			'post_status'      => 'publish',
+			'orderby'          => 'post_date',
+			'order'            => 'DESC',
 		);
+		$limit = $this->get_option('limit_posts');
+		if ( $limit != '') {
+			$args['date_query'] = array(
+					array(
+						'after' => $limit . ' ago',
+					)
+			);
+		}
+
 		$raw = get_posts( $args );
 
 		foreach ( $raw as $p ) {
