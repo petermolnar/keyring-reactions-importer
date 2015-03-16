@@ -30,6 +30,16 @@ License: GPLv3
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+/*
+ * TODO // IDEAS
+ *
+ * instead of one gigantic importer, we could fire up a schedule per host
+ * to import all the reactions from all the networks for that particular post
+ * the question is, how good is the schedule in wp-cron, could it handle
+ * thousands of schedules?
+ *
+ */
+
 // Load Importer API
 if ( !function_exists( 'register_importer ' ) )
 	require_once ABSPATH . 'wp-admin/includes/import.php';
@@ -312,15 +322,27 @@ abstract class Keyring_Reactions_Base {
 	 * enough to allow for redirecting the user if necessary.
 	 */
 	protected function handle_request() {
+
 		// Only interested in POST requests and specific GETs
 		if ( empty( $_GET['import'] ) || static::SLUG != $_GET['import'] )
 			return;
 
 		// Heading to a specific step of the importer
-		if ( !empty( $_REQUEST['step'] ) && ctype_alpha( $_REQUEST['step'] ) )
+		if ( !empty( $_REQUEST['step'] ) && ctype_alpha( $_REQUEST['step'] ) ) {
 			$this->step = (string) $_REQUEST['step'];
+		}
 
 		switch ( $this->step ) {
+		case 'importsingle':
+			if ( empty( $_REQUEST['post_id'] ) || ctype_alpha( $_REQUEST['post_id'] ) ) {
+				$this->step = 'greet';
+				// fall through here, no break
+			}
+			else {
+				$post_id = $_REQUEST['post_id'];
+				$this->do_single_import($post_id);
+				break;
+			}
 		case 'greet':
 			if ( !empty( $_REQUEST[ static::SLUG . '_token' ] ) ) {
 
@@ -375,6 +397,8 @@ abstract class Keyring_Reactions_Base {
 
 			break;
 		}
+
+
 	}
 
 	/**
@@ -397,7 +421,8 @@ abstract class Keyring_Reactions_Base {
 		case 'import':
 			$this->do_import();
 			break;
-
+		case 'import_single':
+			$this->do_single_import();
 		case 'done':
 			$this->done();
 			break;
@@ -426,7 +451,7 @@ abstract class Keyring_Reactions_Base {
 			.keyring-importer li { list-style-type: square; }
 		</style>
 		<div class="wrap keyring-importer">
-		<?php screen_icon(); ?>
+		<?php //screen_icon(); ?>
 		<h2><?php printf( __( '%s Importer', 'keyring' ), esc_html( static::LABEL ) ); ?></h2>
 		<?php
 		if ( count( $this->errors ) ) {
@@ -633,6 +658,72 @@ abstract class Keyring_Reactions_Base {
 		<?php
 
 		$this->footer();
+	}
+
+	/**
+	 *
+	 */
+	public function do_single_import( $post_id ) {
+		defined( 'WP_IMPORTING' ) or define( 'WP_IMPORTING', true );
+		do_action( 'import_start' );
+		set_time_limit( 0 );
+
+		$this->header();
+		echo '<p>' . __( 'Importing Reactions...' ) . '</p>';
+
+		$syndication_url = false;
+
+		// Need a token to do anything with this
+		if ( !$this->service->get_token() )
+			return;
+
+		require_once ABSPATH . 'wp-admin/includes/import.php';
+		require_once ABSPATH . 'wp-admin/includes/post.php';
+		require_once ABSPATH . 'wp-admin/includes/comment.php';
+
+		$post = get_post($post_id);
+		if (!$post)
+			return false;
+
+		$syndication_urls = get_post_meta ( $post->ID, 'syndication_urls', true );
+		if (strstr( $syndication_urls, static::SILONAME )) {
+			$syndication_urls = explode("\n", $syndication_urls );
+
+			foreach ( $syndication_urls as $url ) {
+				if (strstr( $url, static::SILONAME )) {
+					$syndication_url = $url;
+				}
+			}
+		}
+
+		if (!$syndication_url)
+			return false;
+
+		$todo = array (
+			'post_id' => $post->ID,
+			'syndication_url' => $syndication_url,
+		);
+
+		$msg = sprintf(__('Starting auto import for #%s', 'keyring'), $post->ID );
+		Keyring_Util::debug($msg);
+
+
+		foreach ( $this->methods as $method => $type ) {
+			$msg = sprintf(__('Processing %s for post #%s', 'keyring'), $method, $post->ID);
+			Keyring_Util::debug($msg);
+
+			$result = $this->make_all_requests( $method, $todo );
+
+			if ( Keyring_Util::is_error( $result ) )
+				print $result;
+		}
+
+
+		$this->importer_goto( 'done', 1 );
+		$this->footer();
+
+		do_action( 'import_end' );
+		return true;
 	}
 
 	/**
@@ -1070,6 +1161,3 @@ $keyring_reactions = apply_filters( 'keyring_reactions', $keyring_reactions );
 foreach ( $keyring_reactions as $keyring_reaction )
 	require $keyring_reaction;
 unset( $keyring_reactions, $keyring_reaction );
-
-
-?>

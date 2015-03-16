@@ -9,7 +9,7 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 	const KEYRING_SERVICE   = 'Keyring_Service_Facebook';
 	const KEYRING_NAME      = 'facebook';
 	const REQUESTS_PER_LOAD = 3;     // How many remote requests should be made before reloading the page?
-	const NUM_PER_REQUEST   = 100;     // Number of images per request to ask for
+	const NUM_PER_REQUEST   = 100;     // Number of posts per request to ask for
 
 	const SILONAME          = 'facebook.com';
 
@@ -27,35 +27,6 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 		parent::__construct();
 	}
 
-	/**
-	 * Accept the form submission of the Options page and handle all of the values there.
-	 * You'll need to validate/santize things, and probably store options in the DB. When you're
-	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
-	 *
- 	function handle_request_options() {
-		$bools = array('auto_import','auto_approve');
-
-		foreach ( $bools as $bool ) {
-			if ( isset( $_POST[$bool] ) )
-				$_POST[$bool] = true;
-			else
-				$_POST[$bool] = false;
-		}
-
-		// If there were errors, output them, otherwise store options and start importing
-		if ( count( $this->errors ) ) {
-			$this->step = 'greet';
-		} else {
-			$this->set_option( array(
-				'auto_import'     => (bool) $_POST['auto_import'],
-				'auto_approve'    => (bool) $_POST['auto_approve'],
-			) );
-
-			$this->step = 'options';
-		}
-	}*/
-
-
 	function make_all_requests( $method, $post ) {
 		extract($post);
 
@@ -71,8 +42,8 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 				__( 'Missing syndication URL.', 'keyring')
 			);
 
-		$photo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
-		if (empty($photo_id))
+		$silo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
+		if (empty($silo_id))
 			return new Keyring_Error(
 				'keyring-facebook-reactions-photo-id-not-found',
 				__( 'Cannot get photo ID out of syndication URL.', 'keyring' )
@@ -85,16 +56,16 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 				sprintf(__( 'Function is missing for this method (%s), cannot proceed!', 'keyring'), $method)
 			);
 
-		return $this->$func ( $post_id, $photo_id );
+		return $this->$func ( $post_id, $silo_id );
 	}
 
 	/**
 	 * FAVS
 	 */
 
-	function get_likes ( $post_id, $fb_id ) {
+	function get_likes ( $post_id, $silo_id ) {
 		$res = array();
-		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s/likes?", static::GRAPHAPI, $fb_id );
+		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s/likes?", static::GRAPHAPI, $silo_id );
 
 		$params = array(
 			'access_token'   => $this->service->token->token,
@@ -122,9 +93,7 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 					'comment_author_email'  => $element->id . '@' . static::SILONAME,
 					'comment_post_ID'       => $post_id,
 					'comment_type'          => $type,
-					// DON'T set the date unless it's provided - not with favs & votes
-					//'comment_date'          => date("Y-m-d H:i:s"),
-					//'comment_date_gmt'      => date("Y-m-d H:i:s"),
+					// DON'T set the date unless it's provided - not with likes
 					'comment_agent'         => get_class($this),
 					'comment_approved'      => $auto,
 					'comment_content'       => sprintf( $tpl, $author_url, $name ),
@@ -141,9 +110,9 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 	 * comments
 	 */
 
-	function get_comments ( $post_id, $fb_id ) {
+	function get_comments ( $post_id, $silo_id ) {
 		$res = array();
-		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s/comments?", static::GRAPHAPI, $fb_id );
+		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s/comments?", static::GRAPHAPI, $silo_id );
 
 		$params = array(
 			'access_token'   => $this->service->token->token,

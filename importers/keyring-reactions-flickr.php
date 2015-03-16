@@ -24,36 +24,6 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 		parent::__construct();
 	}
 
-	/**
-	 * Accept the form submission of the Options page and handle all of the values there.
-	 * You'll need to validate/santize things, and probably store options in the DB. When you're
-	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
-	 *
- 	function handle_request_options() {
-		$bools = array('auto_import','auto_approve');
-
-		foreach ( $bools as $bool ) {
-			if ( isset( $_POST[$bool] ) )
-				$_POST[$bool] = true;
-			else
-				$_POST[$bool] = false;
-		}
-
-		// If there were errors, output them, otherwise store options and start importing
-		if ( count( $this->errors ) ) {
-			$this->step = 'greet';
-		} else {
-			$this->set_option( array(
-				'auto_import'     => (bool) $_POST['auto_import'],
-				'auto_approve'    => (bool) $_POST['auto_approve'],
-			) );
-
-			$this->step = 'options';
-		}
-	}
-	*/
-
-
 	function make_all_requests( $method, $post ) {
 		extract($post);
 
@@ -69,8 +39,8 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 				__( 'Missing syndication URL.', 'keyring')
 			);
 
-		$photo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
-		if (empty($photo_id))
+		$silo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
+		if (empty($silo_id))
 			return new Keyring_Error(
 				'keyring-flickr-reactions-photo-id-not-found',
 				__( 'Cannot get photo ID out of syndication URL.', 'keyring' )
@@ -83,16 +53,16 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 				sprintf(__( 'Function is missing for this method (%s), cannot proceed!', 'keyring'), $method)
 			);
 
-		return $this->$func ( $post_id, $photo_id );
+		return $this->$func ( $post_id, $silo_id );
 	}
 
 	/**
 	 * FAVS
 	 */
 
-	function get_favs ( $post_id, $photo_id ) {
+	function get_favs ( $post_id, $silo_id ) {
 
-		$results = $this->query_favs( $photo_id );
+		$results = $this->query_favs( $silo_id );
 
 		if ($results && is_array($results) && !empty($results)) {
 
@@ -133,7 +103,7 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 	/**
 	 *
 	 */
-	function query_favs ( $photo_id ) {
+	function query_favs ( $silo_id ) {
 
 		$page = 1;
 		$finished = false;
@@ -145,7 +115,7 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 			$params = array(
 				'method'         => 'flickr.photos.getFavorites',
 				'api_key'        => $this->service->key,
-				'photo_id'       => $photo_id,
+				'photo_id'       => $silo_id,
 				'per_page'       => self::NUM_PER_REQUEST,
 				'page'           => $page,
 			);
@@ -173,8 +143,8 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 	/**
 	 * COMMENTS
 	 */
-	function get_comments ( $post_id, $photo_id ) {
-		$results = $this->query_comments( $photo_id );
+	function get_comments ( $post_id, $silo_id ) {
+		$results = $this->query_comments( $silo_id );
 
 		if ($results && is_array($results) && !empty($results)) {
 
@@ -216,7 +186,7 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 	/**
 	 *
 	 */
-	function query_comments ( $photo_id ) {
+	function query_comments ( $silo_id ) {
 		$res = array();
 
 		$baseurl = "https://api.flickr.com/services/rest/?";
@@ -226,7 +196,7 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 		$params = array(
 			'method'         => 'flickr.photos.comments.getList',
 			'api_key'        => $this->service->key,
-			'photo_id'       => $photo_id,
+			'photo_id'       => $silo_id,
 		);
 
 		$url = $baseurl . http_build_query( $params );

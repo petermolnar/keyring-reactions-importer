@@ -1,0 +1,3 @@
+[submodule "lib/acTwitterConversation"]
+	path = lib/acTwitterConversation
+	url = https://github.com/adriancrepaz/acTwitterConversation.git

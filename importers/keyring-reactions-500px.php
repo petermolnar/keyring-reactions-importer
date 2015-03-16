@@ -26,35 +26,6 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	}
 
 	/**
-	 * Accept the form submission of the Options page and handle all of the values there.
-	 * You'll need to validate/santize things, and probably store options in the DB. When you're
-	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
-	 *
- 	function handle_request_options() {
-		$bools = array('auto_import','auto_approve');
-
-		foreach ( $bools as $bool ) {
-			if ( isset( $_POST[$bool] ) )
-				$_POST[$bool] = true;
-			else
-				$_POST[$bool] = false;
-		}
-
-		// If there were errors, output them, otherwise store options and start importing
-		if ( count( $this->errors ) ) {
-			$this->step = 'greet';
-		} else {
-			$this->set_option( array(
-				'auto_import'     => (bool) $_POST['auto_import'],
-				'auto_approve'    => (bool) $_POST['auto_approve'],
-			) );
-
-			$this->step = 'options';
-		}
-	}
-	*/
-
-	/**
 	 * implementation for all the requests for one method of one post
 	 *
 	 * the reason why this is here and not in the base class is that getting the
@@ -75,8 +46,8 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 				__( 'Missing syndication URL.', 'keyring')
 			);
 
-		$photo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
-		if (empty($photo_id))
+		$silo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
+		if (empty($silo_id))
 			return new Keyring_Error(
 				'keyring-500px-reactions-photo-id-not-found',
 				__( 'Cannot get photo ID out of syndication URL.', 'keyring' )
@@ -89,7 +60,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 				sprintf(__( 'Function is missing for this method (%s), cannot proceed!', 'keyring'), $method)
 			);
 
-		return $this->$func ( $post_id, $photo_id );
+		return $this->$func ( $post_id, $silo_id );
 	}
 
 
@@ -97,8 +68,8 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	 * VOTES (LIKES)
 	 *
 	 */
-	function get_votes ( &$post_id, &$photo_id ) {
-		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/votes", $photo_id);
+	function get_votes ( &$post_id, &$silo_id ) {
+		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/votes", $silo_id);
 
 		$res = $this->request ( $baseurl, 'users' );
 		$tpl = __( '<a href="%s" rel="nofollow">%s</a> liked this photo on <a href="https://500px.com" rel="nofollow">500px.com</a>','keyring');
@@ -111,8 +82,8 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	/**
 	 * FAVS
 	 */
-	function get_favs ( &$post_id, &$photo_id ) {
-		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/favorites", $photo_id);
+	function get_favs ( &$post_id, &$silo_id ) {
+		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/favorites", $silo_id);
 		$res = $this->request ( $baseurl, 'users' );
 
 		$tpl = __( '<a href="%s" rel="nofollow">%s</a> added this photo to their favorites on <a href="https://500px.com" rel="nofollow">500px.com</a>','keyring');
@@ -163,8 +134,8 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	/**
 	 * COMMENTS
 	 */
-	function get_comments ( &$post_id, &$photo_id ) {
-		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/comments", $photo_id);
+	function get_comments ( &$post_id, &$silo_id ) {
+		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/comments", $silo_id);
 
 		$results = $this->request ( $baseurl, 'comments' );
 		if ($results && is_array($results) && !empty($results)) {
