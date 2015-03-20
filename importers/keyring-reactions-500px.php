@@ -12,6 +12,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	const NUM_PER_REQUEST   = 100;     // Number of images per request to ask for
 
 	const SILONAME           = '500px.com';
+	const PHOTOPATTERN       = '/https:\/\/500px\.com\/photo\/([0-9]+)[\/]?(.*)/';
 
 	function __construct() {
 		$this->methods = array (
@@ -46,12 +47,16 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 				__( 'Missing syndication URL.', 'keyring')
 			);
 
-		$silo_id = trim(end((explode('/', rtrim($syndication_url, '/')))));
-		if (empty($silo_id))
+		$matches = array();
+		$match = preg_match ( static::PHOTOPATTERN, $syndication_url, $matches );
+		if ( !$match || empty($matches) || !isset($matches[1]) || empty($matches[1])) {
 			return new Keyring_Error(
 				'keyring-500px-reactions-photo-id-not-found',
 				__( 'Cannot get photo ID out of syndication URL.', 'keyring' )
 			);
+		}
+
+		$silo_id = $matches[1];
 
 		$func = 'get_' . $method;
 		if ( !method_exists( $this, $func ) )
