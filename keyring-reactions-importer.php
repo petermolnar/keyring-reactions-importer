@@ -233,7 +233,7 @@ abstract class Keyring_Reactions_Base {
 			$this->set_option( array(
 				'auto_import'     => (bool) $_POST['auto_import'],
 				'auto_approve'    => (bool) $_POST['auto_approve'],
-				'limit_posts'    => $_POST['limit_posts'],
+				'limit_posts'    => sanitize_text_field($_POST['limit_posts']),
 			) );
 
 			$this->step = 'import';
@@ -884,7 +884,7 @@ abstract class Keyring_Reactions_Base {
 				$result = $this->make_all_requests( $method, $todo );
 
 				if ( Keyring_Util::is_error( $result ) )
-					print $result;
+					print_r ($result);
 			}
 
 			echo "</p>";
@@ -1048,6 +1048,12 @@ abstract class Keyring_Reactions_Base {
 
 		$comment_id = false;
 
+		// safety first
+		$comment['comment_author_email'] = filter_var ( $comment['comment_author_email'], FILTER_SANITIZE_EMAIL );
+		$comment['comment_author_url'] = filter_var ( $comment['comment_author_url'], FILTER_SANITIZE_URL );
+		$comment['comment_author'] = filter_var ( $comment['comment_author'], FILTER_SANITIZE_STRING);
+		$comment['comment_content'] = filter_var ( $comment['comment_content'], FILTER_SANITIZE_SPECIAL_CHARS );
+
 		//test if we already have this imported
 		$args = array(
 			'author_email' => $comment['comment_author_email'],
@@ -1066,6 +1072,7 @@ abstract class Keyring_Reactions_Base {
 		if ( isset( $comment['comment_date']) && !empty($comment['comment_date']) ) {
 			// in case you're aware of a nicer way of doing this, please tell me
 			// or commit a change...
+			/*
 			$tmp = explode ( " ", $comment['comment_date'] );
 			$d = explode( "-", $tmp[0]);
 			$t = explode (':',$tmp[1]);
@@ -1078,6 +1085,9 @@ abstract class Keyring_Reactions_Base {
 				'minute'   => $t[1],
 				'second'   => $t[2],
 			);
+
+			*/
+			$args['date_query'] = $comment['comment_date'];
 
 			//test if we already have this imported
 			Keyring_Util::debug(sprintf(__('checking comment existence for %s (with date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
