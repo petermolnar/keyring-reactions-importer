@@ -141,7 +141,6 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 	 */
 	function get_comments ( &$post_id, &$silo_id ) {
 		$baseurl = sprintf("https://api.500px.com/v1/photos/%s/comments", $silo_id);
-
 		$results = $this->request ( $baseurl, 'comments' );
 		if ($results && is_array($results) && !empty($results)) {
 			$auto = ( $this->get_option( 'auto_approve' ) == 1 ) ? 1 : 0;
@@ -172,6 +171,31 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 				$this->insert_comment ( $post_id, $c, $element, $avatar );
 
 			}
+		}
+
+
+		// temporarily hack
+		$baseurl = sprintf( "https://api.500px.com/v1/photos/%s?", $silo_id );
+		$params = array(
+			'comments' => 1,
+		);
+		$starturl = $baseurl . http_build_query( $params );
+		$result = $this->request ( $starturl, 'photo' );
+
+		if ($result && is_array($result) && !empty($result)) {
+			$geo = array (
+				16 => 'geo_latitude',
+				17 => 'geo_longitude'
+			);
+
+			foreach ($geo as $check => $meta_key ) {
+				if ( isset($result[$check]) && !empty($result[$check])) {
+					update_post_meta ($post_id, $meta_key, $result[$check]);
+					Keyring_Util::debug(sprintf(__('adding geo data for %s','keyring'), $post_id));
+				}
+			}
+
+
 		}
 	}
 

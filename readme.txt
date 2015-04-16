@@ -1,9 +1,9 @@
 === Keyring Reactions Importer ===
 Contributors: cadeyrn
-Tags: facebook, flickr, 500px, backfeed, indieweb, comments, likes, favorites
+Tags: instagram, facebook, flickr, 500px, backfeed, indieweb, comments, likes, favorites
 Requires at least: 3.0
 Tested up to: 4.1
-Stable tag: 0.2
+Stable tag: 0.3
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -31,6 +31,7 @@ A [backfeed](http://indiewebcamp.com/backfeed) plugin to have all the reaction f
 * [500px](https://500px.com/) - comments, favs, likes
 * [Flickr](https://flickr.com/) - comments, favs
 * [Facebook](https://facebook.com/) - comments, likes
+* [Instagram](https://instagram.com) - comments, likes
 
 The plugin uses the brilliant  [Keyring](https://wordpress.org/plugins/keyring/) for handling networks and us based on [Keyring Social Importers](https://wordpress.org/plugins/keyring-social-importers/); both from [Beau Lebens](http://dentedreality.com.au/).
 
@@ -42,6 +43,11 @@ The plugin uses the brilliant  [Keyring](https://wordpress.org/plugins/keyring/)
 4. Make sure WP-Cron is not disabled fully in case you wish to use auto-import.
 
 == Changelog ==
+
+= 0.3 =
+*2015-04-16*
+
+* adding Instagram
 
 = 0.2 =
 *2015-03-13*

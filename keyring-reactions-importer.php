@@ -51,6 +51,7 @@ abstract class Keyring_Reactions_Base {
 	const KEYRING_NAME      = '';    // Keyring service name; SLUG is not used to avoid conflict with Keyring Social Importer
 	const KEYRING_SERVICE   = '';    // Full class name of the Keyring_Service this importer requires
 	const REQUESTS_PER_LOAD = 3;     // How many posts should queried before moving over to the next branch / reload the page
+	const REQUESTS_PER_AUTO = 16;
 	const KEYRING_VERSION   = '1.4'; // Minimum version of Keyring required
 
 	const SILONAME          = '';    // identifier for the silo in the syndication_url field entry
@@ -60,7 +61,7 @@ abstract class Keyring_Reactions_Base {
 
 	const SCHEDULE          = 'daily'; // this may break many things, careful if you wish to change it
 	const SCHEDULETIME      = 36400;   // in tandem with the previous
-	const RESCHEDULE        = 30;
+	const RESCHEDULE        = 60;
 
 	// You shouldn't need to edit (or override) these ones
 	var $step               = 'greet';
@@ -100,11 +101,14 @@ abstract class Keyring_Reactions_Base {
 		// additional comment types
 		add_action('admin_comment_types_dropdown', array(&$this, 'comment_types_dropdown'));
 
+		// ...
+		add_filter('get_avatar_comment_types', array( &$this, 'add_comment_types'));
+
 		// additional cron schedules
 		add_filter( 'cron_schedules', array(&$this, 'cron' ));
 
 		// additional avatar filter
-		add_filter( 'get_avatar' , 'Keyring_Reactions_Base::get_avatar' , 1 , 5 );
+		add_filter( 'get_avatar' , array(&$this, 'get_avatar'), 1, 5 );
 
 		// If a request is made for a new connection, pass it off to Keyring
 		if (
@@ -126,11 +130,6 @@ abstract class Keyring_Reactions_Base {
 			$this->service = call_user_func( array( static::KEYRING_SERVICE, 'init' ) );
 			$this->service->set_token( $token );
 		}
-
-		// Make sure we have a scheduled job to handle auto-imports if enabled
-		// but delay it for good reasons
-		if ( $this->get_option( 'auto_import' ) && !wp_get_schedule( $this->schedule ) )
-			wp_schedule_event( time() + static::SCHEDULETIME, static::SCHEDULE, $this->schedule );
 
 		// jump to the first worker
 		$this->handle_request();
@@ -167,6 +166,17 @@ abstract class Keyring_Reactions_Base {
 	}
 
 	/**
+	 *
+	 */
+	public function add_comment_types ( $types ) {
+		foreach ($this->methods as $method => $type ) {
+			if (!in_array( $type, $types ))
+				array_push( $types, $type );
+		}
+		return $types;
+	}
+
+	/**
 	 * add our own, ridiculously intense schedule for chanining all the requests
 	 * wee need for the imports
 	 *
@@ -175,12 +185,14 @@ abstract class Keyring_Reactions_Base {
 	 * @return array the filtered WP CRON schedules
 	 */
 	public function cron ( $schedules ) {
+		/*
 		if (!isset($schedules[ $this->optname ])) {
 			$schedules[ $this->optname ] = array(
 				'interval' => static::RESCHEDULE,
 				'display' => sprintf(__( '%s auto import' ), static::SLUG )
 			);
 		}
+		*/
 		return $schedules;
 	}
 
@@ -208,6 +220,7 @@ abstract class Keyring_Reactions_Base {
 		else
 			$safe_alt = esc_attr($alt);
 
+
 		return sprintf( '<img alt="%s" src="%s" class="avatar photo u-photo" style="width: %spx; height: %spx;" />', $safe_alt, $c_avatar, $size, $size );
 	}
 
@@ -217,13 +230,31 @@ abstract class Keyring_Reactions_Base {
 	 * done, set $this->step = 'import' to continue, or 'options' to show the options form again.
 	 */
 	protected function handle_request_options() {
-		$bools = array('auto_import','auto_approve');
+		$auto_import = (isset( $_POST['auto_import']) && !empty($_POST['auto_import'])) ? true : false;
 
-		foreach ( $bools as $bool ) {
-			if ( isset( $_POST[$bool] ) )
-				$_POST[$bool] = true;
-			else
-				$_POST[$bool] = false;
+		$auto_approve = (isset( $_POST['auto_approve']) && !empty($_POST['auto_approve'])) ? true : false;
+
+		/*
+		if ( $this->get_option('auto_import') && !wp_get_schedule( $this->schedule ) ) {
+			wp_schedule_event( time() + static::SCHEDULETIME, static::SCHEDULE, $this->schedule );
+		}
+		elseif ( $this->get_option('auto_import') && wp_get_schedule( $this->schedule != static::SCHEDULE ) ) {
+			wp_clear_scheduled_hook ( $this->schedule );
+			wp_schedule_event( time() + static::SCHEDULETIME, static::SCHEDULE, $this->schedule );
+		}
+		elseif ( !$this->get_option('auto_import') ) {
+			Keyring_Util::Debug('Ez most fut?');
+			wp_clear_scheduled_hook ( $this->schedule );
+		}
+		*/
+
+		wp_clear_scheduled_hook ( $this->schedule );
+
+		if ($auto_import) {
+			wp_schedule_event( time() + static::SCHEDULETIME, static::SCHEDULE, $this->schedule );
+		}
+		else {
+			$this->cleanup();
 		}
 
 		// If there were errors, output them, otherwise store options and start importing
@@ -231,12 +262,12 @@ abstract class Keyring_Reactions_Base {
 			$this->step = 'greet';
 		} else {
 			$this->set_option( array(
-				'auto_import'     => (bool) $_POST['auto_import'],
-				'auto_approve'    => (bool) $_POST['auto_approve'],
-				'limit_posts'    => sanitize_text_field($_POST['limit_posts']),
+				'auto_import'     => $auto_import,
+				'auto_approve'    => $auto_approve,
+				'limit_posts'     => sanitize_text_field($_POST['limit_posts']),
 			) );
 
-			$this->step = 'import';
+			$this->step = 'done';
 		}
 	}
 
@@ -300,7 +331,7 @@ abstract class Keyring_Reactions_Base {
 			$this->options = array_merge( (array) $this->options, $name );
 		else if ( is_null( $name ) && is_null( $val ) ) { // $name = null to reset all options
 			$this->options = array();
-			wp_unschedule_event( time(), $this->schedule );
+			wp_clear_scheduled_hook ( $this->schedule );
 		}
 		else if ( is_null( $val ) && isset( $this->options[ $name ] ) )
 			unset( $this->options[ $name ] );
@@ -379,9 +410,9 @@ abstract class Keyring_Reactions_Base {
 			}
 
 			// If we're "refreshing", then just act like it's an auto import
-			if ( isset( $_POST['refresh'] ) ) {
-				$this->auto_import = true;
-			}
+			//if ( isset( $_POST['refresh'] ) ) {
+			//	$this->auto_import = true;
+			//}
 
 			// Write a custom request handler in the extending class here
 			// to handle processing/storing options for import. Make sure to
@@ -414,7 +445,6 @@ abstract class Keyring_Reactions_Base {
 		case 'greet':
 			$this->greet();
 			break;
-
 		case 'options':
 			$this->options();
 			break;
@@ -423,6 +453,7 @@ abstract class Keyring_Reactions_Base {
 			break;
 		case 'import_single':
 			$this->do_single_import();
+			break;
 		case 'done':
 			$this->done();
 			break;
@@ -738,16 +769,20 @@ abstract class Keyring_Reactions_Base {
 	 * one-by-one so one iteration of the WP CRON event will not take that long
 	 * and may not cause issues later on.
 	 */
-	public function do_auto_import() {
+	public function do_auto_import( ) {
 		defined( 'WP_IMPORTING' ) or define( 'WP_IMPORTING', true );
 		do_action( 'import_start' );
 		set_time_limit( 0 );
 
+		Keyring_Util::debug( static::SLUG . sprintf(' auto import: init'));
+
 		// In case auto-import has been disabled, clear all jobs and bail
 		if ( !$this->get_option( 'auto_import' ) ) {
+			Keyring_Util::debug( static::SLUG . sprintf(' auto import: clearing hook'));
 			wp_clear_scheduled_hook( 'keyring_' . static::SLUG . '_import_auto' );
 			return;
 		}
+
 		// Need a token to do anything with this
 		if ( !$this->service->get_token() )
 			return;
@@ -756,13 +791,13 @@ abstract class Keyring_Reactions_Base {
 		require_once ABSPATH . 'wp-admin/includes/post.php';
 		require_once ABSPATH . 'wp-admin/includes/comment.php';
 
-		$this->auto_import = true;
 		$next = 0;
 		$position = 0;
+		$num = 0;
 
 		$this->get_posts();
 
-		if ( !$this->finished ) {
+		while ( !$this->finished && $num < static::REQUESTS_PER_AUTO ) {
 
 			$position = $this->get_option( static::OPTNAME_POSTPOS, 0);
 			if ( !is_array($this->posts) || !isset($this->posts[$position]) )
@@ -772,8 +807,9 @@ abstract class Keyring_Reactions_Base {
 				);
 
 			$todo = $this->posts[$position];
-			$msg = sprintf(__('Starting auto import for #%s', 'keyring'), $todo['post_id']);
-			Keyring_Util::debug($msg);
+			Keyring_Util::debug( static::SLUG . sprintf(' auto import: doing %s/%s',  $position, count($this->posts)-1 ));
+			//$msg = sprintf(__('Starting auto import for #%s', 'keyring'), $todo['post_id']);
+			//Keyring_Util::debug($msg);
 
 			foreach ( $this->methods as $method => $type ) {
 				$msg = sprintf(__('Processing %s for post #%s', 'keyring'), $method, $todo['post_id']);
@@ -786,27 +822,28 @@ abstract class Keyring_Reactions_Base {
 			}
 
 			$next = $position+1;
+			$num++;
 
 			// we're done, clean up
-			if ($next >= sizeof($this->posts)) {
+			if ( $next >= count($this->posts) ) {
 				$this->finished = true;
-				$this->cleanup();
-				Keyring_Util::debug( static::SLUG . ' auto import finished' );
-
-				// set the original schedule, starting with the defined next offset
-				wp_reschedule_event( time() + static::SCHEDULETIME, static::SCHEDULE , $this->schedule );
+				break;
 			}
-			// we're not finished yet
 			else {
 				$this->set_option( static::OPTNAME_POSTPOS, $next );
-				Keyring_Util::debug( static::SLUG . ' auto import: there is more coming' );
-
-				// the next run of this very job should be
-				// near immediate, otherwise we'd never finish with all the post;
-				// event this way a few thousand posts will result in issues
-				// for sure, so there has to be something
-				wp_reschedule_event( time() + static::RESCHEDULE , $this->optname,  $this->schedule );
 			}
+		}
+
+		Keyring_Util::debug( sprintf ('%s auto import: current batch finised (%s to %s out of %s )', static::SLUG, (int) ($position - static::REQUESTS_PER_AUTO), $position, count($this->posts)-1 ));
+
+		if ( $this->finished || $next >= count($this->posts) ) {
+			Keyring_Util::debug( sprintf ('%s auto import: FINISHED', static::SLUG));
+			$this->cleanup();
+			do_action( 'keyring_import_done', $this->optname );
+		}
+		else {
+			Keyring_Util::debug( sprintf ('%s auto import: Rescheduling event', static::SLUG));
+			wp_schedule_single_event( time() + static::RESCHEDULE, $this->schedule );
 		}
 
 		do_action( 'import_end' );
@@ -969,11 +1006,22 @@ abstract class Keyring_Reactions_Base {
 	}
 
 	/**
+	 * When they're complete, give them a quick summary and a link back to their website.
+	 */
+	function saved() {
+		$this->header();
+		echo '<h2>' . __( 'Setting saved!', 'keyring' ) . '</h2>';
+		$this->footer();
+	}
+
+	/**
 	 * reset internal variables
 	 */
 	function cleanup() {
-		$this->set_option( static::OPTNAME_POSTS, array() );
-		$this->set_option( static::OPTNAME_POSTPOS , 0 );
+		$msg = __('DOING CLEANUP', 'keyring');
+		Keyring_Util::debug($msg);
+		$this->set_option( static::OPTNAME_POSTS );
+		$this->set_option( static::OPTNAME_POSTPOS );
 	}
 
 	/**
@@ -1052,10 +1100,10 @@ abstract class Keyring_Reactions_Base {
 		$comment['comment_author_email'] = filter_var ( $comment['comment_author_email'], FILTER_SANITIZE_EMAIL );
 		$comment['comment_author_url'] = filter_var ( $comment['comment_author_url'], FILTER_SANITIZE_URL );
 		$comment['comment_author'] = filter_var ( $comment['comment_author'], FILTER_SANITIZE_STRING);
-		$comment['comment_content'] = filter_var ( $comment['comment_content'], FILTER_SANITIZE_SPECIAL_CHARS );
+		//$comment['comment_content'] = filter_var ( $comment['comment_content'], FILTER_SANITIZE_SPECIAL_CHARS );
 
 		//test if we already have this imported
-		$args = array(
+		$testargs = array(
 			'author_email' => $comment['comment_author_email'],
 			'post_id' => $post_id,
 		);
@@ -1063,7 +1111,7 @@ abstract class Keyring_Reactions_Base {
 		// so if the type is comment and you add type = 'comment', WP will not return the comments
 		// such logical!
 		if ( $comment['comment_type'] != 'comment')
-			$args['type'] = $comment['comment_type'];
+			$testargs['type'] = $comment['comment_type'];
 
 		// in case it's a fav or a like, the date field is not always present
 		// but there should be only one of those, so the lack of a date field indicates
@@ -1087,7 +1135,7 @@ abstract class Keyring_Reactions_Base {
 			);
 
 			*/
-			$args['date_query'] = $comment['comment_date'];
+			$testargs['date_query'] = $comment['comment_date'];
 
 			//test if we already have this imported
 			Keyring_Util::debug(sprintf(__('checking comment existence for %s (with date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
@@ -1101,7 +1149,7 @@ abstract class Keyring_Reactions_Base {
 			Keyring_Util::debug(sprintf(__('checking comment existence for %s (no date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
 		}
 
-		$existing = get_comments($args);
+		$existing = get_comments($testargs);
 
 		// no matching comment yet, insert it
 		if (empty($existing)) {
@@ -1136,8 +1184,6 @@ abstract class Keyring_Reactions_Base {
 				$r = sprintf (__("Already exists: %s from %s for #%s", 'keyring'), $comment['comment_type'], $comment['comment_author'], $post_id );
 		}
 
-		Keyring_Util::debug($r);
-
 		return $comment_id;
 	}
 
@@ -1151,6 +1197,9 @@ function keyring_register_reactions( $slug, $class, $plugin, $info = false ) {
 		$info = __( 'Import reactions from %s and save them as Comments within WordPress.', 'keyring' );
 
 	$name = $class::LABEL;
+	$options = get_option( 'keyring-' . $class::SLUG );
+	if ( !empty( $options['auto_import'] ) && !empty( $options['token'] ) )
+		$name = '&#10003; ' . $name;
 
 	register_importer(
 		$slug,

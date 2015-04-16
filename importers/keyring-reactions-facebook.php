@@ -79,13 +79,13 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 
 			$auto = ( $this->get_option( 'auto_approve' ) == 1 ) ? 1 : 0;
 			$type = $this->methods[ 'likes' ];
+			$tpl = __( '<a href="%s" rel="nofollow">%s</a> liked this entry on <a href="https://facebook.com" rel="nofollow">facebook</a>','keyring');
 
 			foreach ( $results as $element ) {
 
 				$avatar = sprintf('https://graph.facebook.com/%s/picture', $element->id );
 				$author_url = 'https://facebook.com/' . $element->id;
 				$name = $element->name;
-				$tpl = __( '<a href="%s" rel="nofollow">%s</a> liked this entry on <a href="https://facebook.com" rel="nofollow">facebook</a>','keyring');
 
 				$c = array (
 					'comment_author'        => $name,
