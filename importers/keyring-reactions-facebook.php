@@ -129,6 +129,7 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 
 			foreach ( $results as $element ) {
 				$ctime = strtotime($element->created_time);
+				Keyring_Util::debug(sprintf(__('CTIME %s','keyring'), $ctime));
 				$author_url = 'https://facebook.com/' . $element->from->id;
 				$name = $element->from->name;
 				$avatar = sprintf('https://graph.facebook.com/%s/picture/?width=%s&height=%s', $element->from->id, get_option( 'thumbnail_size_w' ), get_option( 'thumbnail_size_h' ));
@@ -153,6 +154,7 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 					'comment_content'       => $message,
 				);
 
+				//Keyring_Util::Debug (json_encode($c));
 				$this->insert_comment($post_id, $c, $element, $avatar);
 			}
 		}

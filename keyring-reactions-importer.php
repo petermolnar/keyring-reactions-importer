@@ -98,6 +98,9 @@ abstract class Keyring_Reactions_Base {
 		// Add a Keyring handler to push us to the next step of the importer once connected
 		add_action( 'keyring_connection_verified', array( &$this, 'verified_connection' ), 10, 2 );
 
+		add_action( 'add_meta_boxes', array(&$this, 'add_post_meta_box' ));
+		add_action( 'save_post', array(&$this, 'handle_post_meta_box' ) );
+
 		// additional comment types
 		add_action('admin_comment_types_dropdown', array(&$this, 'comment_types_dropdown'));
 
@@ -267,7 +270,7 @@ abstract class Keyring_Reactions_Base {
 				'limit_posts'     => sanitize_text_field($_POST['limit_posts']),
 			) );
 
-			$this->step = 'done';
+			$this->step = 'options';
 		}
 	}
 
@@ -361,6 +364,11 @@ abstract class Keyring_Reactions_Base {
 		// Heading to a specific step of the importer
 		if ( !empty( $_REQUEST['step'] ) && ctype_alpha( $_REQUEST['step'] ) ) {
 			$this->step = (string) $_REQUEST['step'];
+		}
+
+		// Heading to a specific step of the importer
+		if ( isset( $_POST['refresh'] ) ) {
+			$this->step = 'import';
 		}
 
 		switch ( $this->step ) {
@@ -670,11 +678,11 @@ abstract class Keyring_Reactions_Base {
 			</table>
 
 			<p class="submit">
-				<input type="submit" name="submit" class="button-primary" id="options-submit" value="<?php _e( 'Import', 'keyring' ); ?>" />
+				<input type="submit" name="submit" class="button-primary" id="options-submit" value="<?php _e( 'Save settings', 'keyring' ); ?>" />
 				<input type="submit" name="reset" value="<?php _e( 'Reset Importer', 'keyring' ); ?>" id="reset" class="button" />
 			</p>
 		</form>
-
+		<!--
 		<script type="text/javascript" charset="utf-8">
 			jQuery( document ).ready( function() {
 				jQuery( '#auto_import' ).on( 'change', function() {
@@ -686,6 +694,7 @@ abstract class Keyring_Reactions_Base {
 				} ).change();
 			} );
 		</script>
+		-->
 		<?php
 
 		$this->footer();
@@ -755,6 +764,62 @@ abstract class Keyring_Reactions_Base {
 
 		do_action( 'import_end' );
 		return true;
+	}
+
+
+	function add_post_meta_box () {
+		$post_id = false;
+		if (!empty($_POST['post_ID']))
+			$post_id = $_POST['post_ID'];
+		else if (!empty($_GET['post']))
+			$post_id = $_GET['post'];
+
+		$syndication_urls = get_post_meta( $post_id, 'syndication_urls', true);
+
+		if ( strstr( $syndication_urls, static::SILONAME )) {
+			add_meta_box(
+				'keyring-reactions-import-' . static::SILONAME,
+				esc_html__ (sprintf ( __('Import reactions for this post from %s', 'Keyring'), static::SILONAME)),
+				array(&$this, 'display_post_meta_box'),
+				'post',
+				'normal',
+				'default'
+			);
+		}
+	}
+
+	function display_post_meta_box() {
+		wp_nonce_field( basename( __FILE__ ), static::SILONAME );
+		?>
+		<p>
+			<?php
+				printf ( '<input style="margin-right: 1em;" class="button button-primary " "id="import-%s" name="import-%s" type="submit" value="Import"></input>', static::SLUG, static::SLUG, static::SLUG, static::SLUG );
+				printf ('<label for="import-%s">%s</label><br />', static::SLUG, sprintf(__('Manually import reactions from %s for this post now'), static::SILONAME ));
+			?>
+		</p>
+		<?php
+
+		/*"admin.php?import=<?php echo static::SLUG; ?>&amp;step=greet" */
+	}
+
+	function handle_post_meta_box( $post_id ) {
+		if ( !isset( $_POST [ static::SILONAME  ] ))
+			return $post_id;
+
+		 if (!wp_verify_nonce( $_POST[ static::SILONAME ], basename( __FILE__ ) ) )
+			return $post_id;
+
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE )
+			return $post_id;
+
+		if ( ! current_user_can( 'edit_page', $post_id ) )
+			return $post_id;
+
+		if (isset( $_POST['import-' . static::SLUG ] )) {
+			die ('eddig ok');
+			$this->do_single_import( $post_id );
+		}
+
 	}
 
 	/**
@@ -1120,12 +1185,12 @@ abstract class Keyring_Reactions_Base {
 		if ( isset( $comment['comment_date']) && !empty($comment['comment_date']) ) {
 			// in case you're aware of a nicer way of doing this, please tell me
 			// or commit a change...
-			/*
+
 			$tmp = explode ( " ", $comment['comment_date'] );
 			$d = explode( "-", $tmp[0]);
 			$t = explode (':',$tmp[1]);
 
-			$args['date_query'] = array(
+			$testargs['date_query'] = array(
 				'year'     => $d[0],
 				'monthnum' => $d[1],
 				'day'      => $d[2],
@@ -1134,11 +1199,10 @@ abstract class Keyring_Reactions_Base {
 				'second'   => $t[2],
 			);
 
-			*/
-			$testargs['date_query'] = $comment['comment_date'];
+			//$testargs['date_query'] = $comment['comment_date'];
 
 			//test if we already have this imported
-			Keyring_Util::debug(sprintf(__('checking comment existence for %s (with date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
+			Keyring_Util::Debug(sprintf(__('checking comment existence for %s (with date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
 		}
 		else {
 			// we do need a date
@@ -1149,7 +1213,9 @@ abstract class Keyring_Reactions_Base {
 			Keyring_Util::debug(sprintf(__('checking comment existence for %s (no date) for post #%s','keyring'), $comment['comment_author_email'], $post_id));
 		}
 
+		Keyring_Util::debug(json_encode($testargs));
 		$existing = get_comments($testargs);
+		Keyring_Util::debug(json_encode($existing));
 
 		// no matching comment yet, insert it
 		if (empty($existing)) {
@@ -1157,7 +1223,7 @@ abstract class Keyring_Reactions_Base {
 			// disable flood control, just in case
 			remove_filter('check_comment_flood', 'check_comment_flood_db', 10, 3);
 
-			Keyring_Util::debug(sprintf(__('inserting comment for post #%s','keyring'), $post_id));
+			//Keyring_Util::debug(sprintf(__('inserting comment for post #%s','keyring'), $post_id));
 
 			// add comment
 			// DON'T use wp_new_comment - if there are like ~1k reactions,
@@ -1176,6 +1242,9 @@ abstract class Keyring_Reactions_Base {
 				// info
 				$r = sprintf (__("New %s #%s from %s imported from %s for #%s", 'keyring'), $comment['comment_type'], $comment_id, $comment['comment_author'], self::SILONAME, $post_id );
 			}
+			else {
+				$r = sprintf (__("Something went wrong inserting %s for #%s from %s", 'keyring'), $comment['comment_type'], $post_id, self::SILONAME);
+			}
 			// re-add flood control
 			add_filter('check_comment_flood', 'check_comment_flood_db', 10, 3);
 		}
@@ -1184,6 +1253,7 @@ abstract class Keyring_Reactions_Base {
 				$r = sprintf (__("Already exists: %s from %s for #%s", 'keyring'), $comment['comment_type'], $comment['comment_author'], $post_id );
 		}
 
+		Keyring_Util::debug($r);
 		return $comment_id;
 	}
 
