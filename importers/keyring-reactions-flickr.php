@@ -144,26 +144,6 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 	 * COMMENTS
 	 */
 	function get_comments ( $post_id, $silo_id ) {
-		/*
-		// <!-- TEMP
-		$lat = get_post_meta($post_id, 'geo_latitude', true);
-		$lon = get_post_meta($post_id, 'geo_longitude', true);
-		if (!empty($lat) && !empty($lon)) {
-			$baseurl = "https://api.flickr.com/services/rest/?";
-			$params = array(
-				'method'		 => 'flickr.photos.geo.setLocation',
-				'api_key'		=> $this->service->key,
-				'photo_id'		=> $silo_id,
-				'lat'			=> $lat,
-				'lon'			=> $lon,
-			);
-			$url = $baseurl . http_build_query( $params );
-			Keyring_Util::Debug(sprintf(__('setting geodata for #%s lat: %s long: %s'), $post_id, $lat, $lon));
-			$this->service->request( $url, array( 'method' => $this->request_method, 'timeout' => 10 ) );
-		}
-		// -->
-		*/
-
 		$results = $this->query_comments( $silo_id );
 		if ($results && is_array($results) && !empty($results)) {
 

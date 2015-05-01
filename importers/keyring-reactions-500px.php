@@ -172,33 +172,6 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 
 			}
 		}
-
-
-		/*
-		// temporarily hack
-		$baseurl = sprintf( "https://api.500px.com/v1/photos/%s?", $silo_id );
-		$params = array(
-			'comments' => 1,
-		);
-		$starturl = $baseurl . http_build_query( $params );
-		$result = $this->request ( $starturl, 'photo' );
-
-		if ($result && is_array($result) && !empty($result)) {
-			$geo = array (
-				16 => 'geo_latitude',
-				17 => 'geo_longitude'
-			);
-
-			foreach ($geo as $check => $meta_key ) {
-				if ( isset($result[$check]) && !empty($result[$check])) {
-					update_post_meta ($post_id, $meta_key, $result[$check]);
-					Keyring_Util::debug(sprintf(__('adding geo data for %s','keyring'), $post_id));
-				}
-			}
-
-
-		}
-		*/
 	}
 
 
