@@ -4,14 +4,14 @@
 function Keyring_Flickr_Reactions() {
 
 class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
-	const SLUG              = 'flickr_reactions';
-	const LABEL             = 'Flickr - comments and favorites';
+	const SLUG			  = 'flickr_reactions';
+	const LABEL			 = 'Flickr - comments and favorites';
 	const KEYRING_SERVICE   = 'Keyring_Service_Flickr';
-	const KEYRING_NAME      = 'flickr';
-	const REQUESTS_PER_LOAD = 3;     // How many remote requests should be made before reloading the page?
-	const NUM_PER_REQUEST   = 50;     // Number of images per request to ask for
+	const KEYRING_NAME	  = 'flickr';
+	const REQUESTS_PER_LOAD = 3;	 // How many remote requests should be made before reloading the page?
+	const NUM_PER_REQUEST   = 50;	 // Number of images per request to ask for
 
-	const SILONAME           = 'flickr.com';
+	const SILONAME		   = 'flickr.com';
 
 	function __construct() {
 		$this->methods = array (
@@ -83,16 +83,16 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 				$author_url = 'https://www.flickr.com/people/' . $element->nsid;
 
 				$c = array (
-					'comment_author'        => $name,
-					'comment_author_url'    => $author_url,
+					'comment_author'		=> $name,
+					'comment_author_url'	=> $author_url,
 					'comment_author_email'  => $email,
-					'comment_post_ID'       => $post_id,
-					'comment_type'          => $type,
-					'comment_date'          => date("Y-m-d H:i:s", $element->favedate ),
-					'comment_date_gmt'      => date("Y-m-d H:i:s", $element->favedate ),
-					'comment_agent'         => get_class($this),
-					'comment_approved'      => $auto,
-					'comment_content'       => sprintf( $tpl, $author_url, $name ),
+					'comment_post_ID'	   => $post_id,
+					'comment_type'		  => $type,
+					'comment_date'		  => date("Y-m-d H:i:s", $element->favedate ),
+					'comment_date_gmt'	  => date("Y-m-d H:i:s", $element->favedate ),
+					'comment_agent'		 => get_class($this),
+					'comment_approved'	  => $auto,
+					'comment_content'	   => sprintf( $tpl, $author_url, $name ),
 				);
 
 				$this->insert_comment ( $post_id, $c, $element, $avatar);
@@ -113,11 +113,11 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 
 		while (!$finished) {
 			$params = array(
-				'method'         => 'flickr.photos.getFavorites',
-				'api_key'        => $this->service->key,
-				'photo_id'       => $silo_id,
-				'per_page'       => self::NUM_PER_REQUEST,
-				'page'           => $page,
+				'method'		 => 'flickr.photos.getFavorites',
+				'api_key'		=> $this->service->key,
+				'photo_id'	   => $silo_id,
+				'per_page'	   => self::NUM_PER_REQUEST,
+				'page'		   => $page,
 			);
 
 			$url = $baseurl . http_build_query( $params );
@@ -144,8 +144,27 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 	 * COMMENTS
 	 */
 	function get_comments ( $post_id, $silo_id ) {
-		$results = $this->query_comments( $silo_id );
+		/*
+		// <!-- TEMP
+		$lat = get_post_meta($post_id, 'geo_latitude', true);
+		$lon = get_post_meta($post_id, 'geo_longitude', true);
+		if (!empty($lat) && !empty($lon)) {
+			$baseurl = "https://api.flickr.com/services/rest/?";
+			$params = array(
+				'method'		 => 'flickr.photos.geo.setLocation',
+				'api_key'		=> $this->service->key,
+				'photo_id'		=> $silo_id,
+				'lat'			=> $lat,
+				'lon'			=> $lon,
+			);
+			$url = $baseurl . http_build_query( $params );
+			Keyring_Util::Debug(sprintf(__('setting geodata for #%s lat: %s long: %s'), $post_id, $lat, $lon));
+			$this->service->request( $url, array( 'method' => $this->request_method, 'timeout' => 10 ) );
+		}
+		// -->
+		*/
 
+		$results = $this->query_comments( $silo_id );
 		if ($results && is_array($results) && !empty($results)) {
 
 			$auto = ( $this->get_option( 'auto_approve' ) == 1 ) ? 1 : 0;
@@ -164,16 +183,16 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 				$author_url = 'https://www.flickr.com/people/' . $element->author;
 
 				$c = array (
-					'comment_author'        => $name,
-					'comment_author_url'    => $author_url,
+					'comment_author'		=> $name,
+					'comment_author_url'	=> $author_url,
 					'comment_author_email'  => $email,
-					'comment_post_ID'       => $post_id,
-					'comment_type'          => $type,
-					'comment_date'          => date("Y-m-d H:i:s", $element->datecreate ),
-					'comment_date_gmt'      => date("Y-m-d H:i:s", $element->datecreate ),
-					'comment_agent'         => get_class($this),
-					'comment_approved'      => $auto,
-					'comment_content'       => $element->_content
+					'comment_post_ID'	   => $post_id,
+					'comment_type'		  => $type,
+					'comment_date'		  => date("Y-m-d H:i:s", $element->datecreate ),
+					'comment_date_gmt'	  => date("Y-m-d H:i:s", $element->datecreate ),
+					'comment_agent'		 => get_class($this),
+					'comment_approved'	  => $auto,
+					'comment_content'	   => $element->_content
 				);
 
 				if ( $comment_id = $this->insert_comment ( $post_id, $c, $element, $avatar))
@@ -194,9 +213,9 @@ class Keyring_Flickr_Reactions extends Keyring_Reactions_Base {
 		// Flickr does not seem to support paged comment requests; easier for me...
 		// https://www.flickr.com/services/api/flickr.photos.comments.getList.htm
 		$params = array(
-			'method'         => 'flickr.photos.comments.getList',
-			'api_key'        => $this->service->key,
-			'photo_id'       => $silo_id,
+			'method'		 => 'flickr.photos.comments.getList',
+			'api_key'		=> $this->service->key,
+			'photo_id'	   => $silo_id,
 		);
 
 		$url = $baseurl . http_build_query( $params );

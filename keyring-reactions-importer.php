@@ -3,7 +3,7 @@
 Plugin Name: Keyring Reactions Importer
 Plugin URI: https://github.com/petermolnar/keyring-reactions-importer
 Description: A recations (comments, favs, etc. ) importer based on Keyring
-Version: 0.2
+Version: 1.0
 Author: Peter Molnar <hello@petermolnar.eu>
 Author URI: http://petermolnar.eu/
 License: GPLv3

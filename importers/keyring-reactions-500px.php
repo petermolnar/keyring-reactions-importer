@@ -174,6 +174,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 		}
 
 
+		/*
 		// temporarily hack
 		$baseurl = sprintf( "https://api.500px.com/v1/photos/%s?", $silo_id );
 		$params = array(
@@ -197,6 +198,7 @@ class Keyring_500px_Reactions extends Keyring_Reactions_Base {
 
 
 		}
+		*/
 	}
 
 
