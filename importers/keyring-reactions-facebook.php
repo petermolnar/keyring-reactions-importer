@@ -56,16 +56,18 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 				sprintf(__( 'Function is missing for this method (%s), cannot proceed!', 'keyring'), $method)
 			);
 
-		return $this->$func ( $post_id, $silo_id );
+		$user_id = $this->service->token->meta['user_id'];
+
+		return $this->$func ( $post_id, $silo_id, $user_id );
 	}
 
 	/**
 	 * FAVS
 	 */
 
-	function get_likes ( $post_id, $silo_id ) {
+	function get_likes ( $post_id, $silo_id, $user_id ) {
 		$res = array();
-		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s/likes?", static::GRAPHAPI, $silo_id );
+		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s_%s/likes?", static::GRAPHAPI, $user_id, $silo_id );
 
 		$params = array(
 			'access_token'   => $this->service->token->token,
@@ -110,9 +112,9 @@ class Keyring_Facebook_Reactions extends Keyring_Reactions_Base {
 	 * comments
 	 */
 
-	function get_comments ( $post_id, $silo_id ) {
+	function get_comments ( $post_id, $silo_id, $user_id ) {
 		$res = array();
-		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s/comments?", static::GRAPHAPI, $silo_id );
+		$baseurl = sprintf( "https://graph.facebook.com/v%s/%s_%s/comments?", static::GRAPHAPI, $user_id, $silo_id );
 
 		$params = array(
 			'access_token'   => $this->service->token->token,
