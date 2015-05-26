@@ -3,7 +3,7 @@ Contributors: cadeyrn
 Tags: instagram, facebook, flickr, 500px, backfeed, indieweb, comments, likes, favorites
 Requires at least: 3.0
 Tested up to: 4.2.1
-Stable tag: 1.0
+Stable tag: 1.1
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -52,6 +52,12 @@ Countless thanks for the [Keyring Social Importers](https://wordpress.org/plugin
 4. Make sure WP-Cron is not disabled fully in case you wish to use auto-import.
 
 == Changelog ==
+
+= 1.1 =
+*2015-05-26*
+
+* Facebook broke it's API... again. Fixed.
+
 
 = 1.0 =
 *2015-05-01*

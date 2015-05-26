@@ -3,7 +3,7 @@
 Plugin Name: Keyring Reactions Importer
 Plugin URI: https://github.com/petermolnar/keyring-reactions-importer
 Description: A recations (comments, favs, etc. ) importer based on Keyring
-Version: 1.0
+Version: 1.1
 Author: Peter Molnar <hello@petermolnar.eu>
 Author URI: http://petermolnar.eu/
 License: GPLv3
@@ -98,8 +98,8 @@ abstract class Keyring_Reactions_Base {
 		// Add a Keyring handler to push us to the next step of the importer once connected
 		add_action( 'keyring_connection_verified', array( &$this, 'verified_connection' ), 10, 2 );
 
-		add_action( 'add_meta_boxes', array(&$this, 'add_post_meta_box' ));
-		add_action( 'save_post', array(&$this, 'handle_post_meta_box' ) );
+		//add_action( 'add_meta_boxes', array(&$this, 'add_post_meta_box' ));
+		//add_action( 'save_post', array(&$this, 'handle_post_meta_box' ) );
 
 		// additional comment types
 		add_action('admin_comment_types_dropdown', array(&$this, 'comment_types_dropdown'));
@@ -790,10 +790,11 @@ abstract class Keyring_Reactions_Base {
 
 	function display_post_meta_box() {
 		wp_nonce_field( basename( __FILE__ ), static::SILONAME );
+		global $post;
 		?>
 		<p>
 			<?php
-				printf ( '<input style="margin-right: 1em;" class="button button-primary " "id="import-%s" name="import-%s" type="submit" value="Import"></input>', static::SLUG, static::SLUG, static::SLUG, static::SLUG );
+				printf ( '<input style="margin-right: 1em;" class="button button-primary " "id="import-%s" name="import-%s" type="submit" value="Import for #%s"></input>', static::SLUG, static::SLUG, $post->ID );
 				printf ('<label for="import-%s">%s</label><br />', static::SLUG, sprintf(__('Manually import reactions from %s for this post now'), static::SILONAME ));
 			?>
 		</p>
@@ -816,8 +817,9 @@ abstract class Keyring_Reactions_Base {
 			return $post_id;
 
 		if (isset( $_POST['import-' . static::SLUG ] )) {
-			die ('eddig ok');
-			$this->do_single_import( $post_id );
+			$id = split('#', $_POST['import-' . static::SLUG ]);
+			$id = $id[1];
+			$this->do_single_import( $id );
 		}
 
 	}
