@@ -540,8 +540,8 @@ abstract class Keyring_Reactions_Base {
 				has_action( 'keyring_' . static::KEYRING_NAME . '_manage_ui' ) // Does this service have a UI to link to?
 			) {
 				$manage_kr_nonce = wp_create_nonce( 'keyring-manage' );
-				$manage_nonce = wp_create_nonce( 'keyring-manage-' . static::SLUG );
-				echo '<p><a href="' . esc_url( Keyring_Util::admin_url( static::SLUG, array( 'action' => 'manage', 'kr_nonce' => $manage_kr_nonce, 'nonce' => $manage_nonce ) ) ) . '" class="button-primary">' . sprintf( __( 'Configure %s Service', 'keyring' ), static::LABEL ) . '</a></p>';
+				$manage_nonce = wp_create_nonce( 'keyring-manage-' . static::KEYRING_NAME );
+				echo '<p><a href="' . esc_url( Keyring_Util::admin_url( static::KEYRING_NAME, array( 'action' => 'manage', 'kr_nonce' => $manage_kr_nonce, 'nonce' => $manage_nonce ) )) . '" class="button-primary">' . sprintf( __( 'Configure %s Service', 'keyring' ), static::LABEL ) . '</a></p>';
 			}
 			$this->footer();
 			return;
